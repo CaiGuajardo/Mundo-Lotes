@@ -1,0 +1,332 @@
+# snippet actual
+
+
+{%- doc -%}
+  This snippet is used to render a product card.
+  It is used in the product block, featured product block, and the product card block.
+  The product object is null or when placeholders are rendered.
+
+  @param {object} product - The product object
+  @param {object} children - The children of the product card
+  @param {object} [block] - The block object
+  @param {number} [product_card_gap] - The gap between the product card children (overrides block settings)
+{%- enddoc -%}
+
+{% assign block_settings = block.settings %}
+
+{% style %}
+  {% if request.visual_preview_mode %}
+    product-card-link {
+      width: 100%;
+      min-width: 250px;
+    }
+  {% endif %}
+{% endstyle %}
+
+{% liquid
+  assign has_quick_add = false
+  if settings.quick_add and product.available
+    assign has_quick_add = true
+  endif
+
+  assign has_mobile_quick_add = false
+  if has_quick_add and settings.mobile_quick_add
+    assign has_mobile_quick_add = true
+  endif
+
+  assign product_card_id = 'product-card-link-' | append: block.id | append: '-' | append: product.id
+  assign product_card_gap_value = product_card_gap | default: block_settings.product_card_gap
+
+  # Logic to determine which variant URL to use (matching swatch selection logic)
+  assign variant_to_link = product.selected_or_first_available_variant
+  assign combined_listing_count = product.options_with_values | map: 'values' | map: 'product_url' | compact | size
+  assign no_swatch_selected = null
+
+  unless combined_listing_count > 0
+    if product.featured_media
+      assign found_variant = false
+
+      for variant in product.variants
+        if variant.featured_media.id == product.featured_media.id
+          assign variant_to_link = variant
+          assign found_variant = true
+          break
+        endif
+      endfor
+
+      unless found_variant
+        for option in product.options_with_values
+          assign swatch_count = option.values | map: 'swatch' | compact | size
+          if swatch_count > 1
+            assign no_swatch_selected = true
+            break
+          endif
+        endfor
+      endunless
+    endif
+  endunless
+
+  if settings.transition_to_main_product
+    assign featured_image = variant_to_link.featured_image
+    if featured_image == blank
+      assign featured_image = product.featured_media.preview_image
+    endif
+
+    if featured_image != blank
+      assign featured_media_url = featured_image | image_url: width: 500
+    endif
+  endif
+
+  assign onboarding = false
+  if product.id == empty or product == blank
+    assign onboarding = true
+  endif
+%}
+
+{%- if settings.transition_to_main_product -%}
+  <product-card-link
+    data-product-id="{{ product.id }}"
+    data-featured-media-url="{{ featured_media_url }}"
+    data-product-transition="{{ settings.transition_to_main_product }}"
+    {% if onboarding %}
+      data-placeholder="true"
+    {% endif %}
+  >
+{%- endif -%}
+<product-card
+  class="product-card"
+  data-product-id="{{ product.id }}"
+  data-product-variants-size="{{ product.variants.size }}"
+  id="product-card-{{ block.id }}"
+  data-product-transition="{{ settings.transition_to_main_product }}"
+  {{ block.shopify_attributes }}
+  {% if no_swatch_selected %}
+    data-no-swatch-selected="true"
+  {% endif %}
+  {% if onboarding %}
+    data-placeholder="true"
+  {% endif %}
+>
+  <a
+    id="{{ product_card_id | md5 }}"
+    {% unless onboarding %}
+      href="{{ variant_to_link.url }}"
+    {% endunless %}
+    class="product-card__link"
+    ref="productCardLink"
+  >
+    <span class="visually-hidden">
+      {{ product.title }}
+    </span>
+  </a>
+
+  <div
+    class="
+      product-card__content
+      layout-panel-flex
+      layout-panel-flex--column
+      product-grid__card
+      spacing-style
+      border-style
+      gap-style
+      {% if block_settings.inherit_color_scheme == false %} color-{{ block_settings.color_scheme }}{% endif %}
+    "
+    style="
+      {% render 'border-override', settings: block_settings %}
+      {% render 'layout-panel-style', settings: block_settings %}
+      {% render 'spacing-style', settings: block_settings %}
+      {% render 'gap-style', value: product_card_gap_value, name: 'product-card-gap' %}
+      --quick-add-display: {% if has_quick_add %}flex{% else %}none{% endif %};
+      --quick-add-mobile-display: {% if has_mobile_quick_add %}flex{% else %}none{% endif %};
+      {% if block_settings.padding-inline-start > 0 %}--zoom-out-padding-inline-start: min(var(--padding-xs), {{ block_settings.padding-inline-start | times: 0.7}}px);{% endif %}
+      {% if block_settings.padding-inline-end > 0 %}--zoom-out-padding-inline-end: min(var(--padding-xs), {{ block_settings.padding-inline-end | times: 0.7}}px);{% endif %}
+      {% if block_settings.padding-block-start > 0 %}--zoom-out-padding-block-start: min(var(--padding-xs), {{ block_settings.padding-block-start | times: 0.7}}px);{% endif %}
+      {% if block_settings.padding-block-end > 0 %}--zoom-out-padding-block-end: min(var(--padding-xs), {{ block_settings.padding-block-end | times: 0.7}}px);{% endif %}
+    "
+  >
+    {{ children }}
+
+    <!-- BOP CUSTOM START -->
+    {% liquid
+      assign manifest = product.metafields.custom.manifest_xlsx
+      assign unidades_mf = product.metafields.custom.cantidad_en_lote
+      assign unidades_val = unidades_mf.value | default: unidades_mf
+      assign valor_mercado_mf = product.metafields.custom.valor_mercado
+      assign valor_mercado = valor_mercado_mf.value | default: valor_mercado_mf
+
+      # CLASIFICACIÓN: soporta key con y sin tilde
+      assign clasif_mf = product.metafields.custom.clasificacion
+      if clasif_mf == blank
+        assign clasif_mf = product.metafields.custom['clasificación']
+      endif
+      assign clasif_val = clasif_mf.value | default: clasif_mf
+
+      assign _classif_down = clasif_val | downcase
+      assign chip_variant = 'neutral'
+      if _classif_down contains 'premium'
+        assign chip_variant = 'premium'
+      elsif _classif_down contains 'básico' or _classif_down contains 'basico'
+        assign chip_variant = 'basic'
+      elsif _classif_down contains 'liquidación' or _classif_down contains 'liquidacion'
+        assign chip_variant = 'liquidation'
+      endif
+    %}
+
+    <div class="bop-card" data-bop-card="true">
+      <!-- Fila superior: Clasificación (izq) / Ficha (der) -->
+      <div class="bop-row bop-row--topline">
+        <div class="bop-classification-wrap">
+          {% if clasif_val != blank %}
+            <div class="bop-classification" title="Clasificación">
+              <small>Clasificación</small>
+              <span class="bop-chip bop-chip--{{ chip_variant }}">{{ clasif_val }}</span>
+            </div>
+          {% else %}
+            <span class="bop-placeholder" aria-hidden="true"></span>
+          {% endif %}
+        </div>
+
+        <div class="bop-top-actions">
+          {% if manifest != blank %}
+            <a class="bop-manifest-link" href="{{ manifest | file_url }}" target="_blank" rel="noopener">
+              <svg class="bop-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d="M12 3v10m0 0 4-4m-4 4-4-4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+                  fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Ficha</span>
+            </a>
+          {% else %}
+            <span class="bop-placeholder" aria-hidden="true"></span>
+          {% endif %}
+        </div>
+      </div>
+
+      <h3 class="bop-title">
+        <a href="{{ variant_to_link.url }}">{{ product.title }}</a>
+      </h3>
+
+      <div class="bop-row bop-row--prices">
+        <div class="bop-price-group">
+          <small>Valor total</small>
+          <span class="bop-price">{{ product.price | money }}</span>
+        </div>
+        <div class="bop-price-group bop-price-group--market">
+          <small>Valor de Mercado</small>
+          {% if valor_mercado != blank %}
+            <span class="bop-market">{{ valor_mercado | times: 100| money }}</span>
+          {% else %}
+            <span class="bop-market bop-placeholder" aria-hidden="true">—</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="bop-divider" aria-hidden="true"></div>
+
+      <div class="bop-row bop-row--meta">
+        <div class="bop-meta__item">
+          <small>Tipo de Producto</small>
+          <div class="bop-meta__value">
+            {% if product.type != blank %}{{ product.type }}{% else %}<span class="bop-placeholder">—</span>{% endif %}
+          </div>
+        </div>
+        <div class="bop-meta__item">
+          <small>Unidades</small>
+          <div class="bop-meta__value">
+            {% if unidades_val != blank %}{{ unidades_val }}{% else %}<span class="bop-placeholder">—</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- BOP CUSTOM END -->
+  </div>
+</product-card>
+{%- if settings.transition_to_main_product -%}
+  </product-card-link>
+{%- endif -%}
+
+{% stylesheet %}
+  product-card-link,
+  :not(product-card-link) product-card { width: 100%; }
+  .product-card__placeholder-image svg { height: 100%; }
+
+  @media screen and (max-width: 749px){
+    .product-card slideshow-arrows .slideshow-control{ display:none; }
+  }
+
+  /* =======================
+     BOP CUSTOM – Product Card
+     ======================= */
+
+  /* Orden visual dentro de la card:
+     1) galería (del tema), 2) info BOP, 3) botón quick add */
+  .product-card__content{ display:flex; flex-direction:column; }
+  .product-card__content .card-gallery{ order:1; }
+  .product-card__content .bop-card{ order:2; padding-top: 1rem; }
+  .product-card__content .quick-add,
+  .product-card__content add-to-cart-component{ order:3; width:100%; margin-top:.75rem; }
+
+  /* Ocultar título y precio nativos para evitar duplicados */
+  :is(.product-card) .product-card__content :is(.price, .product-price, .card__price){ display:none !important; }
+  :is(.product-card) .product-card__content :is(.card__heading, .product-card__title, .product-title){ display:none !important; }
+
+  /* Layout del bloque BOP */
+  [data-bop-card="true"]{
+    display:grid;
+    grid-template-rows: 24px auto auto 1px auto; /* topline / título / precios / divisor / meta */
+    row-gap:.35rem;
+  }
+
+  .bop-row{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; min-height:1rem; }
+
+  /* Fila superior: clasificación (izq) + ficha (der) */
+  .bop-row--topline{ justify-content:space-between; margin-bottom: 1rem; }
+  .bop-top-actions{ display:flex; align-items:center; gap:.5rem; }
+
+  .bop-manifest-link{ display:inline-flex; align-items:center; gap:.4rem; font-size:12px; font-weight:600; opacity:.9; }
+  .bop-manifest-link:hover{ text-decoration:underline; opacity:1; }
+  .bop-icon{ inline-size:16px; block-size:16px; }
+
+  /* Clasificación */
+  .bop-classification-wrap{ min-height:22px; display:flex; align-items:center; }
+  .bop-classification{ display:flex; align-items:center; gap:.4rem; }
+  .bop-classification small{ font-size:12px; opacity:.8; }
+  .bop-chip{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.18rem .55rem; border-radius:999px;
+    font-size:12px; line-height:1; font-weight:700; white-space:nowrap;
+    border:1px solid transparent;
+  }
+  .bop-chip--neutral{ background:#F3F4F6; color:#374151; border-color:#E5E7EB; }
+  .bop-chip--premium{ background:#FDF6E7; color:#977e0b; border-color:#d8b30a; }     /* dorado suave */
+  .bop-chip--basic{ background:#E9F5FF; color:#17a2b8; border-color:#17a2b8; }        /* azul suave */
+  .bop-chip--liquidation{ background:#FDECEC; color:#dc3545; border-color:#dc3545; }  /* rojo suave */
+
+  .bop-title{ margin:0 0 8px 0; line-height:1.2; font-weight:750; letter-spacing:.2px; color: #1D4B96; }
+  .bop-title a{ color:inherit; text-decoration:none; }
+  .bop-title a:hover{ text-decoration:underline; }
+
+  /* Precios */
+  .bop-row--prices{ display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:flex-end; }
+  .bop-price-group{ display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
+  .bop-price-group--market{ align-items:flex-end; }
+  .bop-price-group small{ font-size:14px; opacity:.7; margin-bottom:2px; line-height:1.1; }
+  .bop-price{ font-weight:800; font-size: clamp(18px, 3.6vw, 24px); line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color: #EB621B;}
+  .bop-market{ font-weight:700; font-size: clamp(12px, 2.4vw, 16px); opacity:.85; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color: #1D4B96;}
+
+  .bop-divider{ height:1px; width:100%; background: currentColor; opacity:.12; }
+
+  .bop-row--meta{ gap:1rem; }
+  .bop-meta__item{ display:grid; gap:.15rem; min-width:0; }
+  .bop-meta__item small{ opacity:.8; font-size:12px; }
+  .bop-meta__value{ font-weight:600; font-size:14px; color: #1D4B96!important; }
+  .bop-meta__value:hover { text-decoration: underline; }
+
+  .bop-placeholder{ visibility:hidden; display:inline-block; min-width:1ch; }
+
+  @media (max-width:420px){ .bop-row--meta{ flex-wrap:wrap; } }
+  @media (max-width:390px){ .bop-price-group--market{ align-items:flex-start; } }
+  @media (max-width:330px){
+    .bop-row--prices{ flex-direction:column; align-items:flex-start; gap:.35rem; }
+    .bop-price-group--market{ align-items:flex-start; }
+  }
+{% endstylesheet %}
