@@ -1,0 +1,334 @@
+
+
+{%- assign block_settings = block.settings -%}
+
+<div
+  id="ProductInformation-{{ section.id }}"
+  class="
+    product-details
+    {% if block_settings.sticky_details_desktop %} sticky-content--desktop{% endif %}
+    {% if block_settings.height == 'fill' -%} full-height--desktop{% endif -%}
+  "
+  style="--details-position: {{ block_settings.details_position }};"
+  data-testid="product-information-details"
+  {% if settings.transition_to_main_product %}
+    data-view-transition-type="product-details"
+  {% endif %}
+>
+  {% capture children %}
+    {%- comment -%} --- TÍTULO (estilo grande) --- {%- endcomment -%}
+    <h1 class="ml-title">{{ product.title }}</h1>
+
+    {%- comment -%} === SKU de producto (sin variantes) === {%- endcomment -%}
+    {%- if product.variants.first.sku != blank -%}
+      <div class="product-sku-row">
+        <span class="product-sku-label">SKU:</span>
+        <span class="product-sku-value">{{ product.variants.first.sku }}</span>
+      </div>
+    {%- endif -%}
+
+    <style>
+      .product-sku-row{
+        display:flex; gap:.5rem; align-items:center; margin:.25rem 0 0.75rem;
+        font-size:14px; color:#374151;
+      }
+      .product-sku-label{ font-weight:600; }
+      .product-sku-value{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+
+    {%- comment -%}
+      === PANEL: PRECIOS (Valor total / Referencia) ===
+      Metacampos usados: custom.valor_mercado
+    {%- endcomment -%}
+    <div class="ml-card ml-card--soft">
+      <div class="ml-card__row">
+        <div class="ml-field">
+          <div class="ml-label">Valor total</div>
+          <div class="ml-price-strong">{{ product.price | money }}</div>
+        </div>
+        <div class="ml-field ml-field--right">
+          <div class="ml-label">Valor de Mercado</div>
+          <div class="ml-price-ref">
+            {%- if product.metafields.custom.valor_mercado != blank -%}
+              {{ product.metafields.custom.valor_mercado | times: 100 | money }}
+            {%- elsif product.compare_at_price_max > product.price -%}
+              {{ product.compare_at_price_max | money }}
+            {%- else -%} — {%- endif -%}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {%- comment -%}
+      === PANEL: INFO (Categoría / Unidades / Clasificación) ===
+      Metacampos: custom.manifest_xlsx, custom.cantidad_en_lote, custom.clasificacion (o custom.clasificación)
+    {%- endcomment -%}
+    {%- assign _categoria = product.metafields.custom.product_type -%}
+    {%- assign _unidades = product.metafields.custom.cantidad_en_lote -%}
+
+    {%- comment -%}
+      Soporte para key con y sin tilde:
+      Primero intenta 'clasificacion' (sin tilde); si está en blanco, usa 'clasificación' (con tilde).
+    {%- endcomment -%}
+    {%- assign _classif_raw = product.metafields.custom.clasificacion -%}
+    {%- if _classif_raw == blank -%}
+      {%- assign _classif_raw = product.metafields.custom['clasificación'] -%}
+    {%- endif -%}
+    {%- assign _classif = _classif_raw | default: '—' -%}
+
+    {%- assign _classif_down = _classif | downcase -%}
+    {%- assign _classif_class = 'ml-badge--neutral' -%}
+    {%- if _classif_down contains 'premium' -%}
+      {%- assign _classif_class = 'ml-badge--premium' -%}
+    {%- elsif _classif_down contains 'básico' or _classif_down contains 'basico' -%}
+      {%- assign _classif_class = 'ml-badge--basic' -%}
+    {%- elsif _classif_down contains 'liquidación' or _classif_down contains 'liquidacion' -%}
+      {%- assign _classif_class = 'ml-badge--liquidation' -%}
+    {%- endif -%}
+
+    <div class="ml-card">
+      <div class="ml-card__row ml-card__row--three">
+        <div class="ml-field">
+          <div class="ml-label">Tipo de Producto</div>
+          <div class="ml-value ml-linkish">
+            {%- if _categoria != blank -%}
+              {{ _categoria }}
+            {%- else -%}
+              {{ product.type | default: '—' }}
+            {%- endif -%}
+          </div>
+        </div>
+
+        <div class="ml-field">
+          <div class="ml-label">Unidades</div>
+          <div class="ml-value">
+            {%- if _unidades != blank -%}{{ _unidades }}{%- else -%}—{%- endif -%}
+          </div>
+        </div>
+
+        <div class="ml-field">
+          <div class="ml-label">Clasificación</div>
+          <span class="ml-badge {{ _classif_class }}">{{ _classif }}</span>
+        </div>
+      </div>
+    </div>
+
+    {%- comment -%}
+      Ahora se renderizan los demás bloques (variant-picker, buy-buttons, descripción, etc.)
+      Si no quieres duplicar el "Price" nativo del tema, oculta/elimina el bloque de precio en el editor.
+    {%- endcomment -%}
+    {% content_for 'blocks' %}
+  {% endcapture %}
+
+  {% render 'group', children: children, settings: block_settings, shopify_attributes: block.shopify_attributes %}
+</div>
+
+{% stylesheet %}
+  /* Clear padding on mobile, if not full-width */
+  @media screen and (max-width: 749px) {
+    .product-information.section--page-width .product-details > .group-block {
+      padding-inline: 0;
+    }
+  }
+
+  .view-product-title { display: none; }
+
+  /* Container styles */
+  .product-details { 
+    display: flex; 
+    align-self: start; 
+    justify-content: center; 
+      
+    rte-formatter {
+      padding: 32px 0px;
+      p {
+          max-width: 100% !important;
+      }
+    }
+  }
+
+  /* ---- Mundolotes Panels ---- */
+  .ml-title{
+    font-size: clamp(24px, 3.2vw, 40px);
+    line-height: 1.15;
+    font-weight: 800;
+    color: #174A96; /* azul ML */
+    margin: 0 0 12px 0;
+  }
+
+  .ml-card{
+    background: #FFFBEE;
+    border: 1px solid #DEE2E6;
+    border-radius: 16px;
+    padding: 24px;
+    margin: 0px 0 16px 0;
+  }
+
+  .ml-card__row{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: center;
+  }
+  .ml-card__row--three{
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .ml-field { min-width: 0; }
+  .ml-field--right { text-align: right; }
+
+  .ml-label{
+    font-size: 14px;
+    color: #5A6474;    /* gris etiqueta */
+    margin-bottom: 2px;
+  }
+
+  .ml-price-strong{
+    font-weight: 800;
+    font-size: clamp(20px, 2.2vw, 28px);
+    color: #D3452F;    /* rojo precio fuerte */
+  }
+  .ml-price-ref{
+    font-weight: 700;
+    font-size: clamp(16px, 1.8vw, 20px);
+    color: #334155;
+  }
+
+  .ml-value{ font-weight: 600; }
+
+  /* --- Badge base + variantes de Clasificación --- */
+  .ml-badge{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.25rem .6rem; border-radius:999px;
+    font-size:12px; font-weight:700; letter-spacing:.2px;
+    line-height:1; border:1px solid transparent;
+    white-space:nowrap;
+  }
+  .ml-badge--neutral{ background:#F3F4F6; color:#374151; border-color:#E5E7EB; }
+  .ml-badge--premium{ background:#FDF6E7; color:#977e0b; border-color:#d8b30a; }     /* dorado suave */
+  .ml-badge--basic{ background:#E9F5FF; color:#17a2b8; border-color:#17a2b8; }        /* azul suave */
+  .ml-badge--liquidation{ background:#FDECEC; color:#dc3545; border-color:#dc3545;}  /* rojo suave */
+
+  @media screen and (min-width: 750px) {
+    .product-details > .group-block { height: min-content; }
+    .full-height--desktop {
+      height: 100%;
+      max-height: calc(100vh - var(--header-group-height, 0));
+      min-height: fit-content;
+    }
+    .full-height--desktop .group-block {
+      align-self: var(--details-position, 'flex-start');
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "t:names.details",
+  "blocks": [
+    { "type": "@theme" },
+    { "type": "@app" },
+    { "type": "text" },
+    { "type": "icon" },
+    { "type": "image" },
+    { "type": "button" },
+    { "type": "video" },
+    { "type": "group" },
+    { "type": "spacer" },
+    { "type": "accordion" },
+    { "type": "product-recommendations" },
+    { "type": "price" },
+    { "type": "variant-picker" },
+    { "type": "buy-buttons" },
+    { "type": "product-description" },
+    { "type": "review" },
+    { "type": "accelerated-checkout" },
+    { "type": "_divider" },
+    { "type": "product-inventory" }
+  ],
+  "tag": null,
+  "settings": [
+    { "type": "header", "content": "t:content.size" },
+    { "type": "select", "id": "width", "label": "t:settings.width", "options": [
+        { "value": "fit-content", "label": "t:options.fit_content" },
+        { "value": "fill", "label": "t:options.fill" },
+        { "value": "custom", "label": "t:options.custom" }
+      ], "default": "fill"
+    },
+    { "type": "range", "id": "custom_width", "label": "t:settings.custom_width", "min": 0, "max": 100, "step": 1, "unit": "%", "default": 100, "visible_if": "{{ block.settings.width == 'custom' }}" },
+    { "type": "select", "id": "width_mobile", "label": "t:settings.width_mobile", "options": [
+        { "value": "fit-content", "label": "t:options.fit_content" },
+        { "value": "fill", "label": "t:options.fill" },
+        { "value": "custom", "label": "t:options.custom" }
+      ], "default": "fill"
+    },
+    { "type": "range", "id": "custom_width_mobile", "label": "t:settings.custom_width", "min": 0, "max": 100, "step": 1, "unit": "%", "default": 100, "visible_if": "{{ block.settings.width_mobile == 'custom' }}" },
+    { "type": "select", "id": "height", "label": "t:settings.height", "options": [
+        { "value": "fit", "label": "t:options.fit_content" },
+        { "value": "fill", "label": "t:options.fill" }
+      ], "default": "fit"
+    },
+    { "type": "header", "content": "t:content.layout" },
+    { "type": "select", "id": "details_position", "label": "t:settings.position", "options": [
+        { "value": "flex-start", "label": "t:options.top" },
+        { "value": "center", "label": "t:options.center" },
+        { "value": "flex-end", "label": "t:options.bottom" }
+      ], "default": "flex-start", "visible_if": "{{ block.settings.height == \"fill\" }}" },
+    { "type": "range", "id": "gap", "label": "t:settings.gap", "min": 0, "max": 100, "step": 1, "unit": "px", "default": 12 },
+    { "type": "checkbox", "id": "sticky_details_desktop", "label": "t:settings.make_details_sticky_desktop", "default": false },
+    { "type": "header", "content": "t:content.appearance" },
+    { "type": "checkbox", "id": "inherit_color_scheme", "label": "t:settings.inherit_color_scheme", "default": true },
+    { "type": "color_scheme", "id": "color_scheme", "label": "t:settings.color_scheme", "default": "scheme-1", "visible_if": "{{ block.settings.inherit_color_scheme == false }}" },
+    { "type": "select", "id": "background_media", "label": "t:settings.background_media", "options": [
+        { "value": "none", "label": "t:options.none" },
+        { "value": "image", "label": "t:options.image" },
+        { "value": "video", "label": "t:options.video" }
+      ], "default": "none"
+    },
+    { "type": "video", "id": "video", "label": "t:settings.video", "visible_if": "{{ block.settings.background_media == 'video' }}" },
+    { "type": "select", "id": "video_position", "label": "t:settings.video_position", "options": [
+        { "value": "cover", "label": "t:options.cover" },
+        { "value": "contain", "label": "t:options.contain" }
+      ], "default": "cover", "visible_if": "{{ block.settings.background_media == 'video' }}" },
+    { "type": "image_picker", "id": "background_image", "label": "t:settings.image", "visible_if": "{{ block.settings.background_media == 'image' }}" },
+    { "type": "select", "id": "background_image_position", "label": "t:settings.image_position", "options": [
+        { "value": "cover", "label": "t:options.cover" },
+        { "value": "fit", "label": "t:options.fit" }
+      ], "default": "cover", "visible_if": "{{ block.settings.background_media == 'image' }}" },
+    { "type": "select", "id": "border", "label": "t:settings.borders", "options": [
+        { "value": "none", "label": "t:options.none" },
+        { "value": "solid", "label": "t:options.solid" }
+      ], "default": "none" },
+    { "type": "range", "id": "border_width", "min": 0, "max": 10, "step": 0.5, "unit": "px", "label": "t:settings.border_width", "default": 1, "visible_if": "{{ block.settings.border != 'none' }}" },
+    { "type": "range", "id": "border_opacity", "min": 0, "max": 100, "step": 1, "unit": "%", "label": "t:settings.border_opacity", "default": 100, "visible_if": "{{ block.settings.border != 'none' }}" },
+    { "type": "range", "id": "border_radius", "label": "t:settings.border_radius", "min": 0, "max": 100, "step": 1, "unit": "px", "default": 0 },
+    { "type": "header", "content": "t:content.padding" },
+    { "type": "range", "id": "padding-block-start", "label": "t:settings.top", "min": 0, "max": 100, "step": 1, "unit": "px", "default": 0 },
+    { "type": "range", "id": "padding-block-end", "label": "t:settings.bottom", "min": 0, "max": 100, "step": 1, "unit": "px", "default": 0 },
+    { "type": "range", "id": "padding-inline-start", "label": "t:settings.left", "min": 0, "max": 100, "step": 1, "unit": "px", "default": 0 },
+    { "type": "range", "id": "padding-inline-end", "label": "t:settings.right", "min": 0, "max": 100, "step": 1, "unit": "px", "default": 0 }
+  ],
+  "presets": [
+    {
+      "name": "t:names.details",
+      "settings": {
+        "width": "custom",
+        "custom_width": 100,
+        "padding-block-start": 0,
+        "padding-block-end": 0,
+        "padding-inline-start": 0,
+        "padding-inline-end": 0,
+        "gap": 12,
+        "inherit_color_scheme": true,
+        "color_scheme": "",
+        "video_position": "cover",
+        "background_image_position": "cover",
+        "border": "none",
+        "border_width": 1,
+        "border_opacity": 100
+      },
+      "blocks": { }
+    }
+  ]
+}
+{% endschema %}
